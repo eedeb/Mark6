@@ -1,0 +1,9 @@
+node_modules/
+*.log
+
+# Never commit a real one. The app keeps its config in %APPDATA%\Mark6 (or
+# ~/.config/mark6), not in the checkout — but a servers.json dropped here
+# while testing would hold the local command lines and, worse, the token.
+servers.json
+config.json
+.env

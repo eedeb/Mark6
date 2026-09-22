@@ -42,11 +42,18 @@ class Relay:
         self.log = log
         self.on_connected = on_connected
         self.pool = None
+        self.tools = []
         self.stopping = False
         self.backoff = BACKOFF_START
 
-    def _headers(self):
-        return {"Authorization": f"Bearer {self.cfg['token']}"}
+    def _headers(self, polling=False):
+        headers = {"Authorization": f"Bearer {self.cfg['token']}"}
+        if polling:
+            # Tells the host it may answer this poll with 409 to ask for the
+            # tool list again. Opt-in, because an app that did not understand
+            # 409 would treat it as a transport error and back off forever.
+            headers["X-Mark6-Rehello"] = "1"
+        return headers
 
     def _url(self, path):
         return f"{self.cfg['host']}/mcp/device/{path}"
@@ -67,26 +74,37 @@ class Relay:
         self.log(f"{len(tools)} tool{'' if len(tools) == 1 else 's'} "
                  f"ready for {self.cfg.get('account')}.")
 
-        self._hello(tools)
+        self.tools = tools
+        self._hello(announce=True)
         self._loop()
 
-    def _hello(self, tools):
+    def _hello(self, announce=False):
+        """Publish what this computer can do.
+
+        Sent again whenever the host says it has nothing for us — see _loop.
+        The host keeps the list in memory, so anything that restarts it loses
+        the list while this app is none the wiser: the poll below still
+        succeeds, the token is still good, and the only symptom is an agent
+        that quietly sees no tools. Re-sending is what closes that gap from
+        this end."""
         status, data = httpjson.post(self._url("hello"), self._headers(),
-                                     {"tools": tools}, timeout=30)
+                                     {"tools": self.tools}, timeout=30)
         if status == 401:
             raise RelayError(
                 "This computer is not paired, or it was unpaired from the "
                 "dashboard. Run `run.bat login` again.")
         if status != 200:
             raise RelayError(f"The host refused the tool list (HTTP {status}).")
-        self.log("Connected. Leave this running — closing it takes the tools away.\n")
-        if self.on_connected:
-            self.on_connected(len(tools))
+        if announce:
+            self.log("Connected. Leave this running — closing it takes the tools away.\n")
+            if self.on_connected:
+                self.on_connected(len(self.tools))
 
     def _loop(self):
         while not self.stopping:
             try:
-                status, call = httpjson.get(self._url("next"), self._headers(),
+                status, call = httpjson.get(self._url("next"),
+                                            self._headers(polling=True),
                                             timeout=POLL_HTTP_TIMEOUT)
             except httpjson.Unreachable as e:
                 if self.stopping:
@@ -102,6 +120,16 @@ class Relay:
                 return
             if status == 401:
                 raise RelayError("This computer was unpaired. Run `run.bat login` again.")
+            if status == 409:
+                # The host has no tool list for this computer — it restarted,
+                # or never had one. It cannot ask for it out of band, because
+                # nothing on that side can open a connection to a machine
+                # behind a router; this poll is the only channel there is, so
+                # the answer to "I have nothing for you" is to send it again.
+                self.log("The host lost this computer's tool list — sending it again.")
+                self._hello()
+                self.backoff = BACKOFF_START
+                continue
             if status == 204 or not call:
                 self.backoff = BACKOFF_START
                 continue

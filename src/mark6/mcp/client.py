@@ -27,6 +27,8 @@ import sys
 import threading
 import time
 
+from ..config import BUNDLED_PYTHON
+
 # The app's own root (the directory holding src/, four levels above this
 # file). Used as the default working directory for a spawned
 # server whose entry gives no cwd of its own, so a relative path a person
@@ -46,6 +48,20 @@ CALL_TIMEOUT = 45.0
 _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
+def _console_python():
+    """This interpreter, but python.exe rather than pythonw.exe. The window
+    runs under pythonw, and a server spawned the same way would have no
+    console streams of its own to fall back on; CREATE_NO_WINDOW already
+    keeps python.exe from flashing one up."""
+    exe = sys.executable
+    head, tail = os.path.split(exe)
+    if tail.lower() == "pythonw.exe":
+        candidate = os.path.join(head, "python.exe")
+        if os.path.isfile(candidate):
+            return candidate
+    return exe
+
+
 def resolve_command(cmd):
     """An executable's real path on this platform.
 
@@ -53,6 +69,8 @@ def resolve_command(cmd):
     PATHEXT for you (see the module docstring). Doing the search here keeps
     `shell=False`, so arguments reach the child exactly as they were written
     and nothing is ever parsed as a command line."""
+    if cmd == BUNDLED_PYTHON:
+        return _console_python()
     if os.name != "nt":
         return cmd                      # POSIX exec() already searches PATH
     if os.sep in cmd or (os.altsep and os.altsep in cmd):

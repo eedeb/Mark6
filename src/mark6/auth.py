@@ -44,6 +44,10 @@ def login(on_code=None):
         status, data = httpjson.post(f"{cfg['host']}/host/device/token", {},
                                      {"device_code": device_code})
         if status == 200 and data and data.get("access_token"):
+            # Re-read first: the window lets servers be switched on and off
+            # while this waits, and saving the copy from minutes ago would
+            # quietly undo that.
+            cfg = config.load()
             cfg.update({
                 "token": data["access_token"],
                 "account": data.get("account"),

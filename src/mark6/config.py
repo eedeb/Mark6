@@ -7,10 +7,38 @@ eventually a paste. Stdlib only: this whole app has no third-party
 dependencies, which is also why the bundled interpreter (run.bat, on Windows)
 never has to bootstrap pip.
 """
+import importlib.util
 import json
 import os
 import platform
+import re
 import tempfile
+
+NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+
+# Stands for "the interpreter this app is itself running on", resolved at
+# spawn time by mcp.client.resolve_command. A bundled server is stored with
+# this rather than an absolute path so the install folder can be moved.
+BUNDLED_PYTHON = "{python}"
+
+# MCP servers that ship inside the app (bin\bootstrap.ps1 installs them into
+# the private runtime). Each is added to the list once, and switched OFF like
+# anything else: shipping a server is not the same as choosing to lend it.
+# Removing one sticks — `seeded` remembers it was offered.
+BUILTIN_SERVERS = [
+    {
+        "module": "realhands",
+        "entry": {
+            "name": "computer",
+            "command": BUNDLED_PYTHON,
+            "args": ["-m", "realhands.server"],
+            "env": {},
+            "enabled": False,
+            "description": "Computer use: sees your screen, moves your real "
+                           "mouse, types on your real keyboard.",
+        },
+    },
+]
 
 DEFAULTS = {
     # Where the hosted side lives. Overridable so a checkout can be pointed at
@@ -20,6 +48,7 @@ DEFAULTS = {
     "account": None,
     "device_name": None,
     "servers": [],
+    "seeded": [],
 }
 
 
@@ -53,7 +82,22 @@ def load():
     cfg = dict(DEFAULTS)
     cfg.update(raw)
     cfg["servers"] = raw.get("servers") or []
+    cfg["seeded"] = raw.get("seeded") or []
+    _seed_builtins(cfg)
     return cfg
+
+
+def _seed_builtins(cfg):
+    """Offer each bundled server once, if it is actually installed. Not saved
+    here: the next save (any toggle) records it, and until then this simply
+    runs again with the same result."""
+    for builtin in BUILTIN_SERVERS:
+        name = builtin["entry"]["name"]
+        if name in cfg["seeded"] or importlib.util.find_spec(builtin["module"]) is None:
+            continue
+        cfg["seeded"].append(name)
+        if not any(s["name"] == name for s in cfg["servers"]):
+            cfg["servers"].append(json.loads(json.dumps(builtin["entry"])))
 
 
 def save(cfg):

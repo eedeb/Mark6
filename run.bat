@@ -1,11 +1,15 @@
 @echo off
 rem Mark 6 - run this to pair your computer and lend it MCP tools.
 rem
+rem Double-click it (no arguments) and it opens the Mark 6 window. Give it a
+rem command (login, add, run, ...) and it is the terminal build instead.
+rem
 rem No Node.js, no Python, nothing to install first. The first run fetches a
-rem private copy of Python (python.org's embeddable distribution, ~15MB) into
-rem runtime\ beside this file and never touches anything already on the
-rem machine or PATH - the same trick FreeClaw's own installer uses for itself.
-rem Every run after that starts instantly, straight from that private copy.
+rem private copy of Python (python.org's embeddable distribution) plus
+rem tkinter and the bundled computer-use MCP server into runtime\ beside this
+rem file, and never touches anything already on the machine or PATH - the
+rem same trick FreeClaw's own installer uses for itself. Every run after that
+rem starts instantly, straight from that private copy.
 rem
 rem %* forwards your arguments (login, add, run, ...) with their quoting intact.
 rem
@@ -16,7 +20,8 @@ rem commands it then tries to run. .gitattributes pins the line endings.
 setlocal
 set "HERE=%~dp0"
 
-if not exist "%HERE%runtime\python.exe" (
+rem The stamp name matches $Stamp in bin\bootstrap.ps1.
+if not exist "%HERE%runtime\mark6-runtime-2.ok" (
     where powershell >nul 2>nul
     if errorlevel 1 (
         echo Mark 6 needs PowerShell to fetch its private Python on first run.
@@ -26,7 +31,17 @@ if not exist "%HERE%runtime\python.exe" (
         exit /b 1
     )
     powershell -NoProfile -ExecutionPolicy Bypass -File "%HERE%bin\bootstrap.ps1"
-    if errorlevel 1 exit /b 1
+    if errorlevel 1 (
+        pause
+        exit /b 1
+    )
+)
+
+rem No arguments: the window. pythonw has no console, and `start` returns at
+rem once, so the console this was double-clicked from closes behind it.
+if "%~1"=="" (
+    start "" "%HERE%runtime\pythonw.exe" "%HERE%src\gui.py"
+    endlocal & exit /b 0
 )
 
 "%HERE%runtime\python.exe" "%HERE%src\cli.py" %*

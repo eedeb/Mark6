@@ -37,9 +37,10 @@ class RelayError(Exception):
 
 
 class Relay:
-    def __init__(self, log=print):
+    def __init__(self, log=print, on_connected=None):
         self.cfg = config.load()
         self.log = log
+        self.on_connected = on_connected
         self.pool = None
         self.stopping = False
         self.backoff = BACKOFF_START
@@ -79,6 +80,8 @@ class Relay:
         if status != 200:
             raise RelayError(f"The host refused the tool list (HTTP {status}).")
         self.log("Connected. Leave this running — closing it takes the tools away.\n")
+        if self.on_connected:
+            self.on_connected(len(tools))
 
     def _loop(self):
         while not self.stopping:
@@ -93,6 +96,10 @@ class Relay:
                 self.backoff = min(self.backoff * 2, BACKOFF_MAX)
                 continue
 
+            if self.stopping:
+                # Disconnected while the poll was held open. Anything it
+                # brought back is for whichever relay replaced this one.
+                return
             if status == 401:
                 raise RelayError("This computer was unpaired. Run `run.bat login` again.")
             if status == 204 or not call:

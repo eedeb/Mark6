@@ -1,25 +1,21 @@
 """Mark 6 — the terminal build.
 
-No window yet. This is the daemon half of the desktop app, which is the half
-that does anything: it signs this computer in, runs the MCP servers you
-choose, and lends their tools to your hosted agent for as long as it is
-running. A UI goes on top of exactly this later.
+The same app as the window (gui.py, which is what a bare `run.bat` opens),
+driven by commands instead: it signs this computer in, runs the MCP servers
+you choose, and lends their tools to your hosted agent for as long as it is
+running.
 
     run.bat login                          pair this computer with your account
     run.bat add files -- npx -y @modelcontextprotocol/server-filesystem ~/notes
     run.bat enable files                   switch it on (everything starts off)
     run.bat run                            connect, and stay connected
 """
-import re
 import signal
 import sys
 
 from . import auth, config
 from .relay import Relay, RelayError
 from .mcp.client import StdioServer
-
-_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
-
 
 def _die(message):
     print(message, file=sys.stderr)
@@ -77,7 +73,7 @@ def cmd_add(argv):
     if not name:
         _die("Give the server a short name: run.bat add <name> -- <command>")
         return
-    if not _NAME_RE.match(name):
+    if not config.NAME_RE.match(name):
         _die("A server name can be letters, numbers, dash and underscore, "
             "up to 32 characters.")
         return
@@ -235,6 +231,7 @@ def _usage():
   run.bat remove <name>          forget it entirely
   run.bat test <name>            start it locally and list its tools
   run.bat run                    connect, and stay connected
+  run.bat                        (no command) open the Mark 6 window
 
 Every server starts switched off. Your agent can only ever call the ones you
 have turned on, on this computer, while this is running.""")

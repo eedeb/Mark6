@@ -4,9 +4,14 @@ The desktop half of [Mark 6](https://freeclaw.eedeb.dev/host). It runs MCP
 servers on your own computer and lends their tools to your hosted agent, for
 as long as it is running.
 
-This is the terminal build. There is no window yet — but the window, when it
-comes, goes on top of exactly this, because this is the part that does the
-work.
+Double-click `run.bat` and it opens a small window: pair, tick the tools
+you want to lend, press **Connect**. The same app is also a terminal build
+(`run.bat <command>`) for anyone who would rather type.
+
+It comes with one MCP server already installed:
+[computer-use-mcp](https://github.com/kanishka089/computer-use-mcp)
+("realhands"), which lets your agent see your screen and drive your real
+mouse and keyboard. Like everything else, it starts switched off.
 
 ## What it is for
 
@@ -29,18 +34,21 @@ does not answer.
 
 ## Install — Windows
 
-Double-click `run.bat`, or from a terminal:
+Double-click `run.bat`.
 
-```
-run.bat login
-```
+**Nothing else to install.** The first run (a minute or so) fetches into
+`runtime\` beside this file:
 
-**Nothing else to install.** The first run fetches a private copy of Python
-(python.org's own embeddable distribution, ~15MB) into `runtime\` beside this
-file and never touches anything already on the machine or on PATH — the same
-trick [FreeClaw's own Windows installer](https://github.com/eedeb/FreeClaw)
-uses for itself. Every run after the first starts instantly, with no network
-involved at all.
+- a private copy of Python (python.org's own embeddable distribution),
+- tkinter for the window (python.org's `tcltk.msi`, unpacked with an
+  administrative extract, so nothing is registered or installed system-wide),
+- pip, and the bundled computer-use server (`realhands`, from PyPI).
+
+It never touches anything already on the machine or on PATH — the same trick
+[FreeClaw's own Windows installer](https://github.com/eedeb/FreeClaw) uses for
+itself. Every run after the first starts instantly, with no network involved
+at all. An older `runtime\` from before the window existed is topped up in
+place, not downloaded again.
 
 ## Install — macOS / Linux
 
@@ -54,7 +62,33 @@ python3 src/cli.py login
 Python for a machine that has none. If you already have Python, there is
 nothing to bootstrap.)
 
-## Use
+## Use — the window
+
+1. **Pair this computer.** A code appears and your browser opens the pairing
+   page; enter the code there while signed in to your Mark 6 account.
+2. **Tick the tools** your agent may use. `computer` is the bundled
+   computer-use server; **+ Add server...** takes any other stdio MCP server
+   by command line.
+3. **Connect.** Your agent has those tools until you press Disconnect or
+   close the window. The box underneath shows every call as it happens.
+
+Ticks are locked while connected; disconnect, change them, connect again.
+
+### Computer use
+
+With `computer` ticked, your agent can take screenshots and move the real
+mouse and keyboard — anything you could do sitting there. It is fully
+autonomous once connected, so it comes with its own brakes:
+
+- **Ctrl+Alt+Q** hard-stops it.
+- Slamming the mouse into the **top-left corner** aborts the current action.
+- A small **STOP AGENT** overlay appears top-right while it is acting.
+
+Leave it off unless you are about to use it, and don't leave it connected
+unattended near anything that can spend money, send messages, or delete data.
+Its settings are in the realhands README (all optional).
+
+## Use — the terminal
 
 ```
 run.bat login                  pair this computer with your Mark 6 account
@@ -63,6 +97,7 @@ run.bat test <name>            start it locally and list its tools
 run.bat enable <name>          let your agent use it
 run.bat run                    connect, and stay connected
 run.bat list                   what is configured, and what is on
+run.bat                        (no command) open the window
 ```
 
 (On macOS/Linux, replace `run.bat` with `python3 src/cli.py` throughout.)
@@ -140,6 +175,10 @@ into one list, namespaced `<server>_<tool>` so two servers cannot collide.
 Each description is prefixed with where it runs, so the model — and you,
 reading the transcript — can tell a tool on your laptop from one on the
 internet.
+
+`src/mark6/gui.py` is the window: tkinter, over exactly the same modules as
+the terminal build. Pairing and the relay run on worker threads and report
+back through a queue the Tk loop drains, so nothing slow ever freezes it.
 
 `src/mark6/relay.py` is the loop: publish the tool list, hold a long-poll
 open, run whatever comes back, post the result. A dropped connection backs

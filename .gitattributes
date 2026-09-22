@@ -1,0 +1,20 @@
+# Windows batch files must keep CRLF line endings on checkout, on every
+# platform. cmd.exe reads a .bat in the OEM codepage and mis-parses bare LF:
+# the `rem` lines stop being comments and it tries to run them as commands.
+# Without this, a clone on Linux/macOS — or a repo with core.autocrlf=input —
+# stages LF and `run.bat` prints a screenful of "is not recognized" before it
+# ever reaches Python. Matches the same rule in FreeClaw's own .gitattributes.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell scripts keep CRLF too, and stay pure ASCII — bootstrap.ps1 is run
+# with -File rather than piped through `irm | iex`, but a BOM or a stray
+# non-ASCII byte is still a parse hazard worth ruling out the same way
+# FreeClaw's install.ps1 does.
+*.ps1 text eol=crlf
+
+# Everything else (Python, Markdown) is LF, including on a Windows checkout.
+# CPython doesn't care either way, but a mixed-ending diff is a bad one to
+# review.
+*.py text eol=lf
+*.md text eol=lf

@@ -1,5 +1,8 @@
-node_modules/
 *.log
+
+# The bundled interpreter's own bytecode cache.
+__pycache__/
+*.pyc
 
 # Never commit a real one. The app keeps its config in %APPDATA%\Mark6 (or
 # ~/.config/mark6), not in the checkout — but a servers.json dropped here
@@ -7,3 +10,7 @@ node_modules/
 servers.json
 config.json
 .env
+
+# The bootstrapped private interpreter (run.bat downloads this on first run;
+# never something to commit).
+runtime/

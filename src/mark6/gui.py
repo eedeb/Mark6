@@ -12,7 +12,6 @@ import os
 import queue
 import shlex
 import threading
-import traceback
 import tkinter as tk
 import webbrowser
 from tkinter import messagebox, ttk
@@ -113,29 +112,13 @@ class App:
         self.events.put((kind, payload))
 
     def drain(self):
-        """Deliver whatever the workers have queued, then re-arm.
-
-        Every handler runs inside its own try, and the re-arm is in a finally,
-        because neither is optional: an exception escaping here would leave
-        `after` never called again, and the pump is the only route a worker
-        has to the window. The window would stay open and answer clicks while
-        silently showing nothing — no log lines, no "connected", no pairing —
-        and under pythonw.exe there is no console for the traceback to reach.
-        A failed handler is a bug to read, so it goes in the log box where it
-        can actually be seen."""
         try:
             while True:
-                try:
-                    kind, payload = self.events.get_nowait()
-                except queue.Empty:
-                    return
-                try:
-                    getattr(self, f"on_{kind}")(*payload)
-                except Exception:                         # noqa: BLE001
-                    self.log(f"[internal] {kind} handler failed:\n"
-                             + traceback.format_exc())
-        finally:
-            self.root.after(POLL_MS, self.drain)
+                kind, payload = self.events.get_nowait()
+                getattr(self, f"on_{kind}")(*payload)
+        except queue.Empty:
+            pass
+        self.root.after(POLL_MS, self.drain)
 
     def log(self, line):
         self.log_box.configure(state="normal")

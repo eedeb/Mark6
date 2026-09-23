@@ -31,7 +31,14 @@ BUILTIN_SERVERS = [
         "entry": {
             "name": "computer",
             "command": BUNDLED_PYTHON,
-            "args": ["-m", "realhands.server"],
+            # Through mark6.gameinput rather than realhands.server directly.
+            # It replaces the two input functions that reach ordinary windows
+            # but not games — the mouse is teleported with SetCursorPos, which
+            # produces no movement for a camera to read, and every key carries
+            # scan code 0, which games discard — and then runs the stock server
+            # unchanged. Relative to the app's own folder, which is where a
+            # server is always run from (mcp/client.py: APP_ROOT).
+            "args": ["src/mark6/gameinput.py"],
             "env": {},
             "enabled": False,
             "description": "Computer use: sees your screen, moves your real "
@@ -87,17 +94,37 @@ def load():
     return cfg
 
 
+# What a bundled server's saved entry is allowed to keep across an update.
+# Everything else about it — the command, the arguments, the environment, the
+# description — is defined above and re-applied on every load, so changing how
+# a shipped server is launched takes effect for people who already have it
+# rather than only for new installs. The same reasoning as FreeClaw's
+# BUILTIN_SERVERS: an entry saved by an older version must not be able to pin
+# a stale command line. Only the choice to switch it on is the person's.
+_BUILTIN_OWN_KEYS = ("enabled",)
+
+
 def _seed_builtins(cfg):
-    """Offer each bundled server once, if it is actually installed. Not saved
-    here: the next save (any toggle) records it, and until then this simply
-    runs again with the same result."""
+    """Offer each bundled server once, and keep its command line current.
+
+    Not saved here: the next save (any toggle) records it, and until then this
+    simply runs again with the same result."""
     for builtin in BUILTIN_SERVERS:
-        name = builtin["entry"]["name"]
-        if name in cfg["seeded"] or importlib.util.find_spec(builtin["module"]) is None:
+        entry = builtin["entry"]
+        name = entry["name"]
+        if importlib.util.find_spec(builtin["module"]) is None:
             continue
+        existing = next((s for s in cfg["servers"] if s.get("name") == name), None)
+        if existing is not None:
+            # Re-apply everything but their on/off choice.
+            keep = {k: existing[k] for k in _BUILTIN_OWN_KEYS if k in existing}
+            existing.update(json.loads(json.dumps(entry)))
+            existing.update(keep)
+            continue
+        if name in cfg["seeded"]:
+            continue            # offered before and removed; that decision sticks
         cfg["seeded"].append(name)
-        if not any(s["name"] == name for s in cfg["servers"]):
-            cfg["servers"].append(json.loads(json.dumps(builtin["entry"])))
+        cfg["servers"].append(json.loads(json.dumps(entry)))
 
 
 def save(cfg):

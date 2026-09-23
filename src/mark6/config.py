@@ -31,7 +31,9 @@ BUILTIN_SERVERS = [
         "entry": {
             "name": "computer",
             "command": BUNDLED_PYTHON,
-            "args": ["-m", "realhands.server"],
+            # -s: never let another Python 3.12's user site-packages
+            # shadow the bundled mcp/pyautogui (see run.bat).
+            "args": ["-s", "-m", "realhands.server"],
             "env": {},
             "enabled": False,
             "description": "Computer use: sees your screen, moves your real "

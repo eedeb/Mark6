@@ -37,13 +37,17 @@ if not exist "%HERE%runtime\mark6-runtime-2.ok" (
     )
 )
 
+rem -s keeps out the user site-packages (AppData\Roaming\Python\Python312) of any
+rem other Python 3.12 on this machine. The embeddable build still adds it,
+rem and ignores PYTHONNOUSERSITE, so the flag is the only off switch.
+rem
 rem No arguments: the window. pythonw has no console, and `start` returns at
 rem once, so the console this was double-clicked from closes behind it.
 if "%~1"=="" (
-    start "" "%HERE%runtime\pythonw.exe" "%HERE%src\gui.py"
+    start "" "%HERE%runtime\pythonw.exe" -s "%HERE%src\gui.py"
     endlocal & exit /b 0
 )
 
-"%HERE%runtime\python.exe" "%HERE%src\cli.py" %*
+"%HERE%runtime\python.exe" -s "%HERE%src\cli.py" %*
 set MARK6_EXIT=%ERRORLEVEL%
 endlocal & exit /b %MARK6_EXIT%

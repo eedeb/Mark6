@@ -82,6 +82,23 @@ class Pool:
                 })
         return tools, failures
 
+    def startup_notes(self, limit=6):
+        """(server, line) for whatever each running server printed to stderr
+        while starting.
+
+        Bounded, because a chatty server would otherwise fill the window's log
+        with its own noise before anything useful happened. The interesting
+        lines are always the first few — a server announcing what it is, or
+        explaining which optional half of itself it could not load."""
+        notes = []
+        for name, server in self.servers.items():
+            if not server.running:
+                continue          # its stderr is in the failure it already reported
+            for line in server.stderr_lines[:limit]:
+                if line.strip():
+                    notes.append((name, line.strip()))
+        return notes
+
     def call(self, exposed_name, arguments, timeout=None):
         """Run one published tool. Raises with a readable message."""
         route = self.routes.get(exposed_name)

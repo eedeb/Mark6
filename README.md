@@ -70,7 +70,9 @@ nothing to bootstrap.)
    computer-use server; **+ Add server...** takes any other stdio MCP server
    by command line.
 3. **Connect.** Your agent has those tools until you press Disconnect or
-   close the window. The box underneath shows every call as it happens.
+   close the window. The box underneath shows every call as it happens, and
+   whatever each server said on the way up — which is where you can see
+   whether the game-input shim loaded.
 
 Ticks are locked while connected; disconnect, change them, connect again.
 
@@ -118,6 +120,30 @@ own calls, so bypassing it would have quietly removed a brake this README
 promises; every replacement calls `pyautogui.failSafeCheck()` first and
 honours `pyautogui.PAUSE`. Ctrl+Alt+Q is handled by `keyboard` and was never
 on that path.
+
+#### The action names, because nothing tells the model them
+
+`realhands` types its `action` parameter as a plain string with no `enum`,
+and its description lists no names — so an agent has to guess them, and gets
+them wrong. The valid ones:
+
+```
+screenshot  mouse_move  left_click  right_click  middle_click
+double_click  triple_click  left_click_drag  left_mouse_down  left_mouse_up
+scroll  type  key  hold_key  wait  cursor_position  monitors  activate_window
+```
+
+Two catch people out:
+
+- it is **`mouse_move`**, not `move`;
+- **`key` taps and ignores `duration`.** To walk in a game you need
+  `hold_key`, which is the only action that takes one:
+  `{"action": "hold_key", "text": "w", "duration": 2}`.
+
+If your agent reports `unknown action: 'move'` or presses a key that does
+nothing in a game, it is one of those two. Both belong upstream — an `enum`
+on `action` would end the guessing, and `key` should refuse a `duration` it
+is going to ignore rather than accept it silently.
 
 **What it still won't do well.** `move` is handed absolute pixels, because
 that is what the tool's schema speaks, so it computes a delta from where the

@@ -69,6 +69,13 @@ class Relay:
         tools, failures = self.pool.start()
         for f in failures:
             self.log(f"  ! {f['name']}: {f['error']}")
+        # What each server said on the way up. A stdio server's stderr is its
+        # only way to tell anyone anything — the protocol owns stdout — and it
+        # was being captured for crash reports and otherwise thrown away. That
+        # left questions like "is the game-input shim actually loaded?"
+        # unanswerable from here, when the server had said so in as many words.
+        for name, note in self.pool.startup_notes():
+            self.log(f"  [{name}] {note}")
         for t in tools:
             self.log(f"  · {t['name']}")
         self.log(f"{len(tools)} tool{'' if len(tools) == 1 else 's'} "

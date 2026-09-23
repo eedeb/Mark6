@@ -90,37 +90,6 @@ Leave it off unless you are about to use it, and don't leave it connected
 unattended near anything that can spend money, send messages, or delete data.
 Its settings are in the realhands README (all optional).
 
-#### Games, and why they used to ignore it
-
-`computer` is launched through `src/mark6/gameinput.py` rather than
-`realhands.server` directly. realhands drives the desktop with pyautogui,
-which on Windows injects input two ways that ordinary windows accept and
-games ignore:
-
-- **The mouse is teleported.** `pyautogui.moveTo` is `SetCursorPos(x, y)` and
-  nothing else — the pointer moves with no motion event, so there is no
-  *delta*. A game's camera never reads where the cursor is; it grabs the
-  cursor, hides it, and reads relative movement each frame. Nothing to read,
-  so the view never turns.
-- **Every key carries scan code 0.** pyautogui calls
-  `keybd_event(vk, 0, flags, 0)` — that second `0` is the scan code. Desktop
-  apps key off the virtual-key code and are fine; games read the scan code,
-  and a scan code of 0 is an unknown key they drop. Hence typing into Notepad
-  working perfectly while Minecraft does nothing at all.
-
-The shim replaces four functions on `realhands.input` with `SendInput`
-versions — movement as a real relative delta, keys with a real scan code from
-`MapVirtualKey` — and then runs the stock server unchanged. If the
-replacement ever fails to apply it says so on stderr and runs realhands as it
-comes, because a server that drives the desktop but not games is most of what
-it was for. `MARK6_NO_GAMEINPUT=1` skips it.
-
-**The brakes still work.** pyautogui's corner abort lives inside pyautogui's
-own calls, so bypassing it would have quietly removed a brake this README
-promises; every replacement calls `pyautogui.failSafeCheck()` first and
-honours `pyautogui.PAUSE`. Ctrl+Alt+Q is handled by `keyboard` and was never
-on that path.
-
 #### The action names, because nothing tells the model them
 
 `realhands` types its `action` parameter as a plain string with no `enum`,
@@ -133,26 +102,23 @@ double_click  triple_click  left_click_drag  left_mouse_down  left_mouse_up
 scroll  type  key  hold_key  wait  cursor_position  monitors  activate_window
 ```
 
-Two catch people out:
+Two catch people out: it is **`mouse_move`**, not `move`; and **`key` taps
+and ignores `duration`** — `hold_key` is the only action that takes one. If
+your agent reports `unknown action: 'move'`, or a key it "held" did nothing,
+it is one of those. Both belong upstream: an `enum` on `action` would end the
+guessing, and `key` should refuse a `duration` it is going to ignore rather
+than accept it silently.
 
-- it is **`mouse_move`**, not `move`;
-- **`key` taps and ignores `duration`.** To walk in a game you need
-  `hold_key`, which is the only action that takes one:
-  `{"action": "hold_key", "text": "w", "duration": 2}`.
+#### It drives the desktop, not games
 
-If your agent reports `unknown action: 'move'` or presses a key that does
-nothing in a game, it is one of those two. Both belong upstream — an `enum`
-on `action` would end the guessing, and `key` should refuse a `duration` it
-is going to ignore rather than accept it silently.
-
-**What it still won't do well.** `move` is handed absolute pixels, because
-that is what the tool's schema speaks, so it computes a delta from where the
-pointer is now. On the desktop that lands exactly where asked. In a game with
-the cursor grabbed, "where the pointer is now" is meaningless — the camera
-turns by roughly the distance asked for rather than aiming at a point, so aim
-by nudging. And every action is a round trip through the relay and the model,
-which is seconds: fine for deliberate, slow actions, hopeless for anything
-that needs reacting at frame rate.
+Ordinary windows take everything realhands sends. Games mostly ignore it, and
+that is not worth fixing here: pyautogui moves the pointer with
+`SetCursorPos`, which produces no movement for a camera to read, and sends
+every key with scan code 0, which games discard. Both can be worked around
+with `SendInput` — this app carried a shim that did exactly that for a while
+— but it bought a page of Windows input plumbing to maintain for something
+nobody was asking for, and even working it was seconds per action against a
+game expecting frames. Use it for the desktop.
 
 ## Use — the terminal
 
@@ -253,11 +219,6 @@ answers a poll with 409 it has lost the tool list — it keeps that in memory,
 so anything restarting it loses what this computer can do while this app is
 none the wiser — and the answer is to publish again.
 
-`src/mark6/gameinput.py` is the shim that makes the bundled computer-use
-server work in games (see above). It is a shim rather than a fork so that
-realhands keeps updating from PyPI without anything here needing to keep in
-step.
-
 On the server side this arrives as an ordinary HTTP MCP server in the
 account's list, so FreeClaw needed no new code to use it at all — see
 `FreeBusiness/relay/server.py`.
@@ -282,14 +243,6 @@ Windows, using the private interpreter `run.bat` already bootstrapped:
 run.bat add echo -- runtime\python.exe test\echo_server.py
 run.bat enable echo
 run.bat run
-```
-
-The shim that makes the bundled computer-use server work in games has its own
-checks, which assert what it relies on against the pyautogui that is actually
-installed rather than an imitation of it:
-
-```
-runtime\python.exe test\test_gameinput.py
 ```
 
 macOS/Linux, using your own Python:

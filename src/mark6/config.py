@@ -31,14 +31,7 @@ BUILTIN_SERVERS = [
         "entry": {
             "name": "computer",
             "command": BUNDLED_PYTHON,
-            # Through mark6.gameinput rather than realhands.server directly.
-            # It replaces the two input functions that reach ordinary windows
-            # but not games — the mouse is teleported with SetCursorPos, which
-            # produces no movement for a camera to read, and every key carries
-            # scan code 0, which games discard — and then runs the stock server
-            # unchanged. Relative to the app's own folder, which is where a
-            # server is always run from (mcp/client.py: APP_ROOT).
-            "args": ["src/mark6/gameinput.py"],
+            "args": ["-m", "realhands.server"],
             "env": {},
             "enabled": False,
             "description": "Computer use: sees your screen, moves your real "

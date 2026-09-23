@@ -92,32 +92,50 @@ Its settings are in the realhands README (all optional).
 
 #### The action names
 
-`realhands` types its `action` parameter as a plain string with no `enum`,
-and its own description names none of the values it accepts — so an agent
-had to guess them, and guessed wrong: `move`, `press_key`, `click`. Each
+`realhands` types its `action` parameter as a plain string with no `enum`, and
+its own description names none of the values it accepts — so an agent had to
+guess them, and guessed wrong: `move`, `press_key`, `press`, `keypress`. Each
 guess costs a round trip and comes back as a bare
 `ValueError: unknown action`.
 
-This app fixes that on the way past. When it publishes the `computer` tool it
-folds the real list in as an `enum` on `action`, so the schema the model reads
-names all eighteen (`src/mark6/config.py`, applied by `mcp/pool.py`):
+This app corrects that on the way past. When it publishes the `computer` tool
+it folds the real list in as an `enum` (`src/mark6/config.py`, applied by
+`mcp/pool.py`):
 
 ```
 screenshot  mouse_move  left_click  right_click  middle_click
 double_click  triple_click  left_click_drag  left_mouse_down  left_mouse_up
 scroll  type  key  hold_key  wait  cursor_position  monitors  activate_window
+stop  done  release
 ```
 
-Note it is **`mouse_move`**, not `move`; **`key`**, not `press_key`; and the
-key name goes in **`text`** — there is no `key` parameter. The published
-description also states the one trap the enum cannot express: **`key` taps
-and ignores `duration`**, and `hold_key` is the only action that holds one.
+The last three stand the safety overlay down; `realhands` handles them before
+its dispatch, which is why reading the dispatch alone misses them.
+
+Three details decide whether that correction reaches the model at all, and
+each one was wrong on the first attempt:
+
+- **It goes on the `anyOf` string branch.** An optional parameter is published
+  as `{"anyOf": [{"type": "string"}, {"type": "null"}]}`, and an `enum` left
+  beside that is not where a reader looks.
+- **`steps` is corrected too.** realhands' description says *"BATCH WHENEVER
+  YOU CAN"*, so most actions arrive inside `steps` — which it types as a bare
+  list of dicts with no element schema. An enum on the outer `action` does
+  nothing for a step, and a step is where `press` was guessed.
+- **The note is prepended, not appended.** The relay truncates a description
+  to 1024 characters with a plain slice, and realhands' own text already
+  overruns that, so anything added at the end is cut off before a model sees
+  it.
+
+The prepended note carries only what an enum cannot: that key presses are
+action `key` with the name in `text` (there is no `press`, `keypress` or
+`move`), that `scroll` requires a `coordinate`, and that `key` ignores
+`duration` while `hold_key` honours it.
 
 Only servers this app ships are corrected this way. One you add yourself is
 published exactly as it describes itself, and if a future `realhands` renames
-the parameter the overlay is skipped rather than inventing a schema for it.
-Both still belong upstream — an `enum` on `action`, and a `key` that refuses
-a `duration` it is going to ignore instead of accepting it silently.
+a parameter the overlay is skipped rather than inventing a schema for it. All
+of it still belongs upstream.
 
 #### It drives the desktop, not games
 

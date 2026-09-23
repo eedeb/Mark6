@@ -25,6 +25,20 @@ BUNDLED_PYTHON = "{python}"
 # the private runtime). Each is added to the list once, and switched OFF like
 # anything else: shipping a server is not the same as choosing to lend it.
 # Removing one sticks — `seeded` remembers it was offered.
+# Every value realhands' `computer` tool accepts, read off its own dispatch
+# (realhands/server.py). The first eighteen are the dispatch proper; `stop`,
+# `done` and `release` are handled before it and stand the safety overlay
+# down, which its description tells the model to call when a task is finished
+# -- so leaving them out of an enum would forbid the one action it documents
+# by name.
+COMPUTER_ACTIONS = [
+    "screenshot", "mouse_move", "left_click", "right_click", "middle_click",
+    "double_click", "triple_click", "left_click_drag", "left_mouse_down",
+    "left_mouse_up", "scroll", "type", "key", "hold_key", "wait",
+    "cursor_position", "monitors", "activate_window",
+    "stop", "done", "release",
+]
+
 BUILTIN_SERVERS = [
     {
         "module": "realhands",
@@ -38,39 +52,43 @@ BUILTIN_SERVERS = [
             "enabled": False,
             "description": "Computer use: sees your screen, moves your real "
                            "mouse, types on your real keyboard.",
-            # realhands types `action` as a bare string with no enum, and its
-            # own description lists no names, so a model has to guess them --
-            # and guesses `move`, `press_key`, `click`, none of which exist.
-            # Every guess costs a round trip and comes back as a raw
-            # ValueError. These are the names its dispatch actually accepts;
-            # publishing them as an enum is what stops the guessing, because
-            # the enum is in the schema the model reads, whereas this repo's
-            # README is not.
+            # Everything below corrects how realhands describes itself. It
+            # types `action` as a bare string, names none of its values, and
+            # leaves `steps` -- the batch path its own description tells the
+            # model to prefer -- as a bare object with no schema at all. So
+            # the model guesses, and has guessed `move`, `press_key`, `press`
+            # and `keypress`. Each guess is a wasted round trip that comes
+            # back as a raw ValueError.
             #
-            # Applied by mcp/pool.py, and only where it still fits: if a
-            # future realhands renames the parameter or drops it, the overlay
-            # is skipped rather than fabricating a schema for a tool that has
-            # moved on.
+            # Applied by mcp/pool.py, and only where it still fits: a
+            # parameter that upstream renames or drops is left alone rather
+            # than re-invented.
             "tool_schema": {
                 "computer": {
-                    "note": "`action` must be one of the values in its enum. "
-                            "`key` taps and ignores `duration` -- `hold_key` "
-                            "is the only action that holds one. Key names are "
-                            "xdotool spellings (Return, ctrl+c, shift+Tab), "
-                            "passed in `text`.",
-                    "properties": {
-                        "action": {
-                            "enum": [
-                                "screenshot", "mouse_move", "left_click",
-                                "right_click", "middle_click", "double_click",
-                                "triple_click", "left_click_drag",
-                                "left_mouse_down", "left_mouse_up", "scroll",
-                                "type", "key", "hold_key", "wait",
-                                "cursor_position", "monitors",
-                                "activate_window",
-                            ],
-                        },
-                    },
+                    # PREPENDED, not appended. The relay truncates a
+                    # description to 1024 characters with a bare slice
+                    # (FreeBusiness/relay/server.py), and realhands' own text
+                    # already overruns that on its own -- so anything added at
+                    # the end is sliced off before a model ever sees it. This
+                    # is also why it stays short: every character here costs a
+                    # character of realhands' own explanation of batching and
+                    # screenshot coordinates.
+                    #
+                    # It carries only what the enum cannot: the names that do
+                    # NOT exist but keep getting tried, and the two parameter
+                    # rules whose absence produces a ValueError.
+                    "note": "Key presses are action `key` with the key name "
+                            "in `text` (e.g. \"Return\") -- there is no "
+                            "`press`, `keypress` or `move`. `scroll` requires "
+                            "`coordinate`. `key` ignores `duration`; only "
+                            "`hold_key` holds one.",
+                    "properties": {"action": {"enum": COMPUTER_ACTIONS}},
+                    # The batch path. realhands' description says "BATCH
+                    # WHENEVER YOU CAN", so most actions arrive as steps --
+                    # and `steps` is typed `list[dict]` with no inner schema,
+                    # which is exactly where `press` was guessed. An enum on
+                    # the outer `action` does nothing for a step.
+                    "item_properties": {"steps": {"action": {"enum": COMPUTER_ACTIONS}}},
                 },
             },
         },

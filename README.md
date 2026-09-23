@@ -258,6 +258,14 @@ run.bat enable echo
 run.bat run
 ```
 
+The shim that makes the bundled computer-use server work in games has its own
+checks, which assert what it relies on against the pyautogui that is actually
+installed rather than an imitation of it:
+
+```
+runtime\python.exe test\test_gameinput.py
+```
+
 macOS/Linux, using your own Python:
 
 ```

@@ -254,7 +254,22 @@ def build_replacements(pyautogui, stock):
 _MOVE_STEPS = 12
 _MOVE_STEP_SLEEP = 0.004
 
-_VK_SHIFT = 0x10
+_VK_SHIFT, _VK_CTRL, _VK_ALT = 0x10, 0x11, 0x12
+
+
+def _keyboard_mapping(pyautogui):
+    """pyautogui's name -> virtual-key table.
+
+    It lives on the *platform* module (`_pyautogui_win`), not on the package,
+    which is how pyautogui's own isValidKey reaches it — `pyautogui.keyboardMapping`
+    does not exist and raises AttributeError. The fallback is for a build that
+    ever moves it: an empty table means every key falls through to stock
+    pyautogui, which is wrong for games but still works."""
+    platform_module = getattr(pyautogui, "platformModule", None)
+    mapping = getattr(platform_module, "keyboardMapping", None)
+    if mapping is None:
+        mapping = getattr(pyautogui, "keyboardMapping", None)
+    return mapping or {}
 
 
 def _vks_for(pyautogui, text):
@@ -266,17 +281,22 @@ def _vks_for(pyautogui, text):
         names = _translate_combo(text)
     except Exception:                                   # noqa: BLE001
         names = [p.strip().lower() for p in str(text).split("+") if p.strip()]
+    mapping = _keyboard_mapping(pyautogui)
     vks = []
     for name in names:
-        code = pyautogui.keyboardMapping.get(name)
+        code = mapping.get(name)
         if code is None:
             return []
-        # pyautogui packs "this character needs shift" into the high byte, the
-        # same divmod its own _keyDown does. Dropping it would turn '!' into
-        # '1' — so the shift is sent as a key of its own instead.
+        # The table is filled by VkKeyScan, which packs the modifiers a
+        # character needs into the high byte: 1 shift, 2 ctrl, 4 alt. Same
+        # divmod pyautogui's own _keyDown does, and all three matter —
+        # dropping shift would turn '!' into '1', and on a layout where a
+        # character is reached through AltGr, dropping ctrl+alt would type the
+        # wrong one entirely.
         mods, vk = divmod(code, 0x100)
-        if mods & 0x1 and _VK_SHIFT not in vks:
-            vks.append(_VK_SHIFT)
+        for flag, mod_vk in ((0x4, _VK_ALT), (0x2, _VK_CTRL), (0x1, _VK_SHIFT)):
+            if mods & flag and mod_vk not in vks:
+                vks.append(mod_vk)
         vks.append(vk)
     return vks
 

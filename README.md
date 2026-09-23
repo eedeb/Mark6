@@ -71,8 +71,8 @@ nothing to bootstrap.)
    by command line.
 3. **Connect.** Your agent has those tools until you press Disconnect or
    close the window. The box underneath shows every call as it happens, and
-   whatever each server said on the way up — which is where you can see
-   whether the game-input shim loaded.
+   whatever each server said on the way up, which is where a server that
+   started but could not load half of itself says so.
 
 Ticks are locked while connected; disconnect, change them, connect again.
 
@@ -90,11 +90,17 @@ Leave it off unless you are about to use it, and don't leave it connected
 unattended near anything that can spend money, send messages, or delete data.
 Its settings are in the realhands README (all optional).
 
-#### The action names, because nothing tells the model them
+#### The action names
 
 `realhands` types its `action` parameter as a plain string with no `enum`,
-and its description lists no names — so an agent has to guess them, and gets
-them wrong. The valid ones:
+and its own description names none of the values it accepts — so an agent
+had to guess them, and guessed wrong: `move`, `press_key`, `click`. Each
+guess costs a round trip and comes back as a bare
+`ValueError: unknown action`.
+
+This app fixes that on the way past. When it publishes the `computer` tool it
+folds the real list in as an `enum` on `action`, so the schema the model reads
+names all eighteen (`src/mark6/config.py`, applied by `mcp/pool.py`):
 
 ```
 screenshot  mouse_move  left_click  right_click  middle_click
@@ -102,12 +108,16 @@ double_click  triple_click  left_click_drag  left_mouse_down  left_mouse_up
 scroll  type  key  hold_key  wait  cursor_position  monitors  activate_window
 ```
 
-Two catch people out: it is **`mouse_move`**, not `move`; and **`key` taps
-and ignores `duration`** — `hold_key` is the only action that takes one. If
-your agent reports `unknown action: 'move'`, or a key it "held" did nothing,
-it is one of those. Both belong upstream: an `enum` on `action` would end the
-guessing, and `key` should refuse a `duration` it is going to ignore rather
-than accept it silently.
+Note it is **`mouse_move`**, not `move`; **`key`**, not `press_key`; and the
+key name goes in **`text`** — there is no `key` parameter. The published
+description also states the one trap the enum cannot express: **`key` taps
+and ignores `duration`**, and `hold_key` is the only action that holds one.
+
+Only servers this app ships are corrected this way. One you add yourself is
+published exactly as it describes itself, and if a future `realhands` renames
+the parameter the overlay is skipped rather than inventing a schema for it.
+Both still belong upstream — an `enum` on `action`, and a `key` that refuses
+a `duration` it is going to ignore instead of accepting it silently.
 
 #### It drives the desktop, not games
 
@@ -206,7 +216,9 @@ underlying Win32 reason).
 into one list, namespaced `<server>_<tool>` so two servers cannot collide.
 Each description is prefixed with where it runs, so the model — and you,
 reading the transcript — can tell a tool on your laptop from one on the
-internet.
+internet. It is also where a bundled server's schema is corrected before
+publishing (`_overlay`), which is how the computer-use action names reach the
+model at all.
 
 `src/mark6/gui.py` is the window: tkinter, over exactly the same modules as
 the terminal build. Pairing and the relay run on worker threads and report
@@ -227,6 +239,12 @@ account's list, so FreeClaw needed no new code to use it at all — see
 (`subprocess`, `threading`, `urllib.request`, `json`). That is what makes the
 Windows bootstrap this simple: no pip, no `requirements.txt`, no build step —
 just an interpreter and this checkout.
+
+## Testing
+
+`python3 test/test_pool_schema.py` checks what the published tool list looks
+like — the namespacing, and the schema corrections above — without starting a
+server.
 
 ## Testing without a real MCP server
 

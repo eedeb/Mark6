@@ -32,16 +32,64 @@ def _safe_name(part):
     return _UNSAFE.sub("_", str(part or "")).strip("_")
 
 
+def _overlay(tool, overlay):
+    """(description, inputSchema) for one tool, with a bundled server's
+    corrections folded in.
+
+    Some servers describe themselves badly enough that the model cannot call
+    them without guessing -- the bundled computer-use server types its
+    `action` as a bare string and names none of the eighteen values it
+    accepts, so an agent tries `move`, or `press_key`, and gets a raw
+    ValueError back. A correction belongs in the schema, because the schema is
+    the only thing on this path the model ever reads.
+
+    Only for servers this app ships and has read the source of; a server
+    somebody adds themselves is published exactly as it describes itself.
+
+    Every step is conditional on the tool still looking the way the overlay
+    expects. A parameter that has been renamed or dropped upstream is left
+    alone rather than re-added, so a stale overlay degrades to today's
+    behaviour instead of advertising a parameter that no longer exists."""
+    description = tool.get("description") or ""
+    schema = tool.get("inputSchema") or {"type": "object"}
+    if not overlay:
+        return description, schema
+
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return description, schema
+
+    patched = None
+    for param, extra in (overlay.get("properties") or {}).items():
+        if not isinstance(properties.get(param), dict):
+            continue            # renamed or gone upstream; say nothing
+        if patched is None:
+            patched = dict(schema)
+            patched["properties"] = dict(properties)
+        patched["properties"][param] = dict(patched["properties"][param], **extra)
+
+    if patched is None:
+        return description, schema      # nothing matched; leave it untouched
+
+    note = overlay.get("note")
+    if note:
+        description = f"{description.rstrip()}\n\n{note}".strip()
+    return description, patched
+
+
 class Pool:
     def __init__(self, entries=None):
         self.servers = {}
         self.routes = {}            # exposed name -> (server, real tool name)
+        self.overlays = {}          # server name -> {tool name -> overlay}
         for entry in entries or []:
             if not entry.get("enabled"):
                 continue
             self.servers[entry["name"]] = StdioServer(
                 entry["name"], entry["command"], entry.get("args"),
                 entry.get("env"), entry.get("cwd"))
+            if entry.get("tool_schema"):
+                self.overlays[entry["name"]] = entry["tool_schema"]
 
     @property
     def names(self):
@@ -70,6 +118,8 @@ class Pool:
                                      "error": f"two tools both map to '{exposed}'; rename one"})
                     continue
                 self.routes[exposed] = (server, tool["name"])
+                described, schema = _overlay(
+                    tool, (self.overlays.get(name) or {}).get(tool["name"]))
                 tools.append({
                     "name": exposed,
                     # Says where it runs, in the description the model
@@ -77,8 +127,8 @@ class Pool:
                     # tell a tool on somebody's laptop from one on the open
                     # internet.
                     "description": (f"[runs on your computer, via {name}] "
-                                    f"{tool.get('description') or ''}").strip(),
-                    "inputSchema": tool.get("inputSchema") or {"type": "object"},
+                                    f"{described}").strip(),
+                    "inputSchema": schema,
                 })
         return tools, failures
 

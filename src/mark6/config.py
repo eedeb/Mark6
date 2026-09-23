@@ -38,6 +38,41 @@ BUILTIN_SERVERS = [
             "enabled": False,
             "description": "Computer use: sees your screen, moves your real "
                            "mouse, types on your real keyboard.",
+            # realhands types `action` as a bare string with no enum, and its
+            # own description lists no names, so a model has to guess them --
+            # and guesses `move`, `press_key`, `click`, none of which exist.
+            # Every guess costs a round trip and comes back as a raw
+            # ValueError. These are the names its dispatch actually accepts;
+            # publishing them as an enum is what stops the guessing, because
+            # the enum is in the schema the model reads, whereas this repo's
+            # README is not.
+            #
+            # Applied by mcp/pool.py, and only where it still fits: if a
+            # future realhands renames the parameter or drops it, the overlay
+            # is skipped rather than fabricating a schema for a tool that has
+            # moved on.
+            "tool_schema": {
+                "computer": {
+                    "note": "`action` must be one of the values in its enum. "
+                            "`key` taps and ignores `duration` -- `hold_key` "
+                            "is the only action that holds one. Key names are "
+                            "xdotool spellings (Return, ctrl+c, shift+Tab), "
+                            "passed in `text`.",
+                    "properties": {
+                        "action": {
+                            "enum": [
+                                "screenshot", "mouse_move", "left_click",
+                                "right_click", "middle_click", "double_click",
+                                "triple_click", "left_click_drag",
+                                "left_mouse_down", "left_mouse_up", "scroll",
+                                "type", "key", "hold_key", "wait",
+                                "cursor_position", "monitors",
+                                "activate_window",
+                            ],
+                        },
+                    },
+                },
+            },
         },
     },
 ]

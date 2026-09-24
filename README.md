@@ -93,14 +93,10 @@ Its settings are in the realhands README (all optional).
 #### The action names
 
 `realhands` types its `action` parameter as a plain string with no `enum`, and
-its own description names none of the values it accepts — so an agent had to
-guess them, and guessed wrong: `move`, `press_key`, `press`, `keypress`. Each
-guess costs a round trip and comes back as a bare
-`ValueError: unknown action`.
-
-This app corrects that on the way past. When it publishes the `computer` tool
-it folds the real list in as an `enum` (`src/mark6/config.py`, applied by
-`mcp/pool.py`):
+its own description names none of the values it accepts — so an agent has to
+guess, and guesses wrong: `move`, `press_key`, `press`, `keypress`. Each guess
+costs a round trip and comes back as a bare `ValueError: unknown action`. The
+valid ones:
 
 ```
 screenshot  mouse_move  left_click  right_click  middle_click
@@ -109,33 +105,24 @@ scroll  type  key  hold_key  wait  cursor_position  monitors  activate_window
 stop  done  release
 ```
 
-The last three stand the safety overlay down; `realhands` handles them before
-its dispatch, which is why reading the dispatch alone misses them.
+The last three stand the safety overlay down; realhands handles them just
+before its dispatch, so reading the dispatch alone misses them.
 
-Three details decide whether that correction reaches the model at all, and
-each one was wrong on the first attempt:
+**This app no longer corrects that itself.** The hosted relay does it, for
+every account on every publish, in `FreeBusiness/relay/toolfix.py` — so the
+fix reaches a desktop that has not been updated, which a fix shipped here
+cannot. Three details decide whether such a correction reaches the model at
+all, and all three were wrong when this lived here: the `enum` has to go on
+the `anyOf` string branch rather than beside it; `steps` needs the same enum,
+because realhands' own description says *"BATCH WHENEVER YOU CAN"* and types
+`steps` as a bare list of dicts; and an added note has to be **prepended**,
+since the relay truncates a description at 1024 characters and realhands' own
+text already overruns that.
 
-- **It goes on the `anyOf` string branch.** An optional parameter is published
-  as `{"anyOf": [{"type": "string"}, {"type": "null"}]}`, and an `enum` left
-  beside that is not where a reader looks.
-- **`steps` is corrected too.** realhands' description says *"BATCH WHENEVER
-  YOU CAN"*, so most actions arrive inside `steps` — which it types as a bare
-  list of dicts with no element schema. An enum on the outer `action` does
-  nothing for a step, and a step is where `press` was guessed.
-- **The note is prepended, not appended.** The relay truncates a description
-  to 1024 characters with a plain slice, and realhands' own text already
-  overruns that, so anything added at the end is cut off before a model sees
-  it.
-
-The prepended note carries only what an enum cannot: that key presses are
-action `key` with the name in `text` (there is no `press`, `keypress` or
-`move`), that `scroll` requires a `coordinate`, and that `key` ignores
-`duration` while `hold_key` honours it.
-
-Only servers this app ships are corrected this way. One you add yourself is
-published exactly as it describes itself, and if a future `realhands` renames
-a parameter the overlay is skipped rather than inventing a schema for it. All
-of it still belongs upstream.
+Worth knowing when reading a transcript: it is **`mouse_move`**, not `move`;
+**`key`**, not `press`/`keypress`, with the key name in **`text`**; `scroll`
+needs a `coordinate`; and `key` ignores `duration` — `hold_key` is the only
+action that holds one. All of it still belongs upstream.
 
 #### It drives the desktop, not games
 
@@ -234,9 +221,7 @@ underlying Win32 reason).
 into one list, namespaced `<server>_<tool>` so two servers cannot collide.
 Each description is prefixed with where it runs, so the model — and you,
 reading the transcript — can tell a tool on your laptop from one on the
-internet. It is also where a bundled server's schema is corrected before
-publishing (`_overlay`), which is how the computer-use action names reach the
-model at all.
+internet.
 
 `src/mark6/gui.py` is the window: tkinter, over exactly the same modules as
 the terminal build. Pairing and the relay run on worker threads and report
@@ -257,12 +242,6 @@ account's list, so FreeClaw needed no new code to use it at all — see
 (`subprocess`, `threading`, `urllib.request`, `json`). That is what makes the
 Windows bootstrap this simple: no pip, no `requirements.txt`, no build step —
 just an interpreter and this checkout.
-
-## Testing
-
-`python3 test/test_pool_schema.py` checks what the published tool list looks
-like — the namespacing, and the schema corrections above — without starting a
-server.
 
 ## Testing without a real MCP server
 

@@ -21,7 +21,7 @@ setlocal
 set "HERE=%~dp0"
 
 rem The stamp name matches $Stamp in bin\bootstrap.ps1.
-if not exist "%HERE%runtime\mark6-runtime-2.ok" (
+if not exist "%HERE%runtime\mark6-runtime-3.ok" (
     where powershell >nul 2>nul
     if errorlevel 1 (
         echo Mark 6 needs PowerShell to fetch its private Python on first run.

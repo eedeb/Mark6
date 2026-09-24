@@ -25,7 +25,7 @@ $Here = Split-Path -Parent $PSScriptRoot
 $RuntimeDir = Join-Path $Here "runtime"
 $Python = Join-Path $RuntimeDir "python.exe"
 # run.bat looks for this; bump both together when the runtime gains a step.
-$Stamp = Join-Path $RuntimeDir "mark6-runtime-2.ok"
+$Stamp = Join-Path $RuntimeDir "mark6-runtime-3.ok"
 # Matches the version FreeClaw's own install.ps1 already trusts.
 $PythonVersion = "3.12.8"
 
@@ -126,6 +126,33 @@ try {
         & $Python -m pip install -q --no-warn-script-location --disable-pip-version-check `
             --no-build-isolation realhands
         if ($LASTEXITCODE -ne 0) { Die "Couldn't install realhands." }
+    }
+
+    # -- 5. Mark 6's own MCP server: audio recall -------------------------
+    # The server's code is in src\mark6_tools; what it needs from pip is
+    # soundcard (WASAPI loopback capture of what the speakers play) and
+    # faster-whisper (local speech-to-text on the CPU; nothing is uploaded).
+    $site = Join-Path $RuntimeDir "Lib\site-packages"
+    if (-not ((Test-Path (Join-Path $site "faster_whisper")) -and
+              (Test-Path (Join-Path $site "soundcard")))) {
+        Write-Host "Installing audio recall (soundcard, faster-whisper)..."
+        & $Python -s -m pip install -q --no-warn-script-location --disable-pip-version-check `
+            "soundcard>=0.4.4" "faster-whisper>=1.1"
+        if ($LASTEXITCODE -ne 0) { Die "Couldn't install soundcard / faster-whisper." }
+    }
+
+    # The speech model, fetched now rather than on the first recall, so that
+    # first recall is not a 150MB download the agent is left waiting on. Kept
+    # in runtime\models rather than the Hugging Face cache in the user's
+    # profile, like everything else this script fetches.
+    $model = Join-Path $RuntimeDir "models\whisper-base.en"
+    if (-not (Test-Path (Join-Path $model "model.bin"))) {
+        Write-Host "Downloading the speech model (Whisper base.en)..."
+        # Hugging Face's own chatter (deprecation notices, a rate-limit tip)
+        # is not something a person installing this can act on.
+        $env:HF_HUB_VERBOSITY = "error"
+        & $Python -s -W ignore -c "import sys; from faster_whisper import download_model; download_model('base.en', output_dir=sys.argv[1])" $model
+        if ($LASTEXITCODE -ne 0) { Die "Couldn't download the speech model." }
     }
 
     Set-Content -Path $Stamp -Encoding ascii -Value "ok"

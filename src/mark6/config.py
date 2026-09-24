@@ -21,13 +21,17 @@ NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 # this rather than an absolute path so the install folder can be moved.
 BUNDLED_PYTHON = "{python}"
 
+# The checkout's root, the directory holding src/.
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # MCP servers that ship inside the app (bin\bootstrap.ps1 installs them into
 # the private runtime). Each is added to the list once, and switched OFF like
 # anything else: shipping a server is not the same as choosing to lend it.
 # Removing one sticks — `seeded` remembers it was offered.
 BUILTIN_SERVERS = [
     {
-        "module": "realhands",
+        # Offered only once these import, i.e. once bootstrap.ps1 has run.
+        "requires": ["realhands"],
         "entry": {
             "name": "computer",
             "command": BUNDLED_PYTHON,
@@ -38,6 +42,22 @@ BUILTIN_SERVERS = [
             "enabled": False,
             "description": "Computer use: sees your screen, moves your real "
                            "mouse, types on your real keyboard.",
+        },
+    },
+    {
+        # Mark 6's own server (src/mark6_tools). The code ships in this
+        # checkout; what bootstrap.ps1 adds is its pip dependencies.
+        "requires": ["faster_whisper", "soundcard"],
+        "entry": {
+            "name": "mark6",
+            "command": BUNDLED_PYTHON,
+            # An absolute path, but a safe one to store: bundled entries are
+            # re-applied on every load, so a moved folder just re-resolves.
+            "args": ["-s", os.path.join(APP_ROOT, "src", "tools_server.py")],
+            "env": {},
+            "enabled": False,
+            "description": "Audio recall: keeps the last 30 seconds of what "
+                           "this computer plays, transcribed on this computer.",
         },
     },
 ]
@@ -107,7 +127,7 @@ def _seed_builtins(cfg):
     for builtin in BUILTIN_SERVERS:
         entry = builtin["entry"]
         name = entry["name"]
-        if importlib.util.find_spec(builtin["module"]) is None:
+        if any(importlib.util.find_spec(m) is None for m in builtin["requires"]):
             continue
         existing = next((s for s in cfg["servers"] if s.get("name") == name), None)
         if existing is not None:

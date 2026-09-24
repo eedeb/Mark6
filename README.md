@@ -8,10 +8,16 @@ Double-click `run.bat` and it opens a small window: pair, tick the tools
 you want to lend, press **Connect**. The same app is also a terminal build
 (`run.bat <command>`) for anyone who would rather type.
 
-It comes with one MCP server already installed:
-[computer-use-mcp](https://github.com/kanishka089/computer-use-mcp)
-("realhands"), which lets your agent see your screen and drive your real
-mouse and keyboard. Like everything else, it starts switched off.
+It comes with two MCP servers already installed, both switched off like
+everything else:
+
+- `computer` —
+  [computer-use-mcp](https://github.com/kanishka089/computer-use-mcp)
+  ("realhands"), which lets your agent see your screen and drive your real
+  mouse and keyboard.
+- `mark6` — Mark 6's own server (`src/mark6_tools`), for reaching this
+  computer in ways no off-the-shelf server does. For now: **audio recall**,
+  a transcript of the last 30 seconds of whatever the computer played.
 
 ## What it is for
 
@@ -42,7 +48,9 @@ Double-click `run.bat`.
 - a private copy of Python (python.org's own embeddable distribution),
 - tkinter for the window (python.org's `tcltk.msi`, unpacked with an
   administrative extract, so nothing is registered or installed system-wide),
-- pip, and the bundled computer-use server (`realhands`, from PyPI).
+- pip, and the bundled computer-use server (`realhands`, from PyPI),
+- audio recall's dependencies (`soundcard`, `faster-whisper`) and its speech
+  model (Whisper `base.en`, ~145MB, into `runtime\models`).
 
 It never touches anything already on the machine or on PATH — the same trick
 [FreeClaw's own Windows installer](https://github.com/eedeb/FreeClaw) uses for
@@ -67,7 +75,7 @@ nothing to bootstrap.)
 1. **Pair this computer.** A code appears and your browser opens the pairing
    page; enter the code there while signed in to your Mark 6 account.
 2. **Tick the tools** your agent may use. `computer` is the bundled
-   computer-use server; **+ Add server...** takes any other stdio MCP server
+   computer-use server, `mark6` is audio recall; **+ Add server...** takes any other stdio MCP server
    by command line.
 3. **Connect.** Your agent has those tools until you press Disconnect or
    close the window. The box underneath shows every call as it happens, and
@@ -134,6 +142,31 @@ with `SendInput` — this app carried a shim that did exactly that for a while
 — but it bought a page of Windows input plumbing to maintain for something
 nobody was asking for, and even working it was seconds per action against a
 game expecting frames. Use it for the desktop.
+
+### Audio recall
+
+With `mark6` ticked, your agent gets one tool, `recall_recent_audio`: the
+transcript of the last 30 seconds of what this computer played through its
+speakers. That's for "what did she just say?" or "write down that number"
+about a video, call or podcast you just heard.
+
+- **Output only.** It records the default playback device through WASAPI
+  loopback, and never opens a microphone. It follows the default device, so
+  switching to headphones is picked up within a few seconds.
+- **Transcribed on this computer** with faster-whisper, and nothing is
+  uploaded. The agent gets only the text, and only when it calls the tool.
+- **Recording runs only while connected** with `mark6` ticked. The audio stays
+  in memory and is dropped as it ages past 30 seconds.
+- While sound is playing, the transcript is refreshed every 5 seconds into
+  `%APPDATA%\Mark6\audio-recall.txt`, which only ever holds the last 30
+  seconds of text. A recall transcribes once more, so it is current to the
+  moment it was asked (well under a second on a typical CPU).
+- English only (`base.en`). Set `MARK6_WHISPER_MODEL` to another
+  faster-whisper model name or folder, such as `small` for other languages,
+  to use a different one.
+
+That covers a video call too: the other people's voices come out of your
+speakers, so they are in the transcript. Tick it with that in mind.
 
 ## Use — the terminal
 
@@ -208,6 +241,12 @@ Nothing about a paired computer is permanent: **Unpair** on your dashboard
 stops it on the app's next poll, whether or not the machine is reachable.
 
 ## How it works
+
+`src/mark6_tools/` is the other end of that: Mark 6's own MCP server, a
+small hand-rolled stdio server (`stdio_server.py`) with its tools registered
+in `server.py`. It isn't built on the `mcp` package on purpose: a tools-only
+server needs four methods, and that package's 1.x → 2.x change has already
+broken an import path once.
 
 `src/mark6/mcp/client.py` speaks the stdio MCP transport — newline-delimited
 JSON-RPC over a child process's stdin and stdout. Children are spawned with
